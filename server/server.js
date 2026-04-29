@@ -25,9 +25,11 @@ app.use(express.urlencoded({extended:true}));
 
 // import routes
 import userRoutes from './routes/userRoutes.js';
+import foodRoutes from './routes/foodRoutes.js'
 
 // use route
 app.use('/api/user',userRoutes);
+app.use('/api/food',foodRoutes);
 
 app.get('/',(req,res)=>{
     res.send("Server is working successfully.!!");

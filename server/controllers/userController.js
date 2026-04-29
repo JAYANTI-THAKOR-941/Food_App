@@ -2,6 +2,7 @@ import { transporter } from "../middlewares/sendMail.js";
 import User from "../models/User.js";
 import { genrateOtp } from "../utils/genrateOtp.js";
 import bcrypt from "bcryptjs";
+import genrateToken from "../utils/genrateToken.js";
 
 export const register = async (req, res) => {
   try {
@@ -122,3 +123,62 @@ export const register = async (req, res) => {
     res.status(501).json({ message: "Internal server error.", err });
   }
 };
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found.!!" });
+    }
+
+    if (user.otp !== otp) {
+      return res.status(409).json({ message: "Invalid otp..!!" });
+    }
+
+    if (!user.otpExpiry > Date.now()) {
+      return res.status(409).json({ message: "Otp is expired...!!" });
+    }
+
+    user.otp = null;
+    user.otpExpiry = null;
+    user.isVerified = true;
+    user.save();
+
+    res.status(200).json({ message: "User register successfully.!" });
+  } catch (err) {
+    res.status(501).json({ message: "Internal server error.", err });
+  }
+};
+
+// login controller
+
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found.!!" });
+    }
+
+    const isMatched = await bcrypt.compare(password, user.password);
+
+    if (!isMatched) {
+      return res
+        .status(401)
+        .json({ message: "Email and password incorrect.!" });
+    }
+
+    const token = genrateToken(user);
+
+    res.status(200).json({ message: "Login successfully.!" ,token,user});
+  } catch (err) {
+    res.status(501).json({ message: "Internal server error.", err });
+  }
+};
+
+
