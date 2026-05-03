@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import { genrateOtp } from "../utils/genrateOtp.js";
 import bcrypt from "bcryptjs";
 import genrateToken from "../utils/genrateToken.js";
+import crypto from "crypto";
 
 export const register = async (req, res) => {
   try {
@@ -175,10 +176,82 @@ export const login = async (req, res) => {
 
     const token = genrateToken(user);
 
-    res.status(200).json({ message: "Login successfully.!" ,token,user});
+    res.status(200).json({ message: "Login successfully.!", token, user });
   } catch (err) {
     res.status(501).json({ message: "Internal server error.", err });
   }
 };
 
 
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found.!!" });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    console.log(resetToken);
+
+    const hashedToken =  crypto.createHash('sha256').update(resetToken).digest('hex');
+    console.log(hashedToken)
+
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpiry = Date.now() + 15 * 60 * 1000;
+    await user.save();
+    
+    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`
+
+    await transporter.sendMail({
+      from: "jyantithakor941@gmail.com",
+      to: email,
+      subject: "Password Reset Link",
+      html: `
+        <a href=${resetUrl}>Reset Password</a>
+      `
+    });
+
+    return res.status(201).json({ message: "Link sent on your mail.!" });
+
+  } catch (err) {
+    res.status(500).json({ message: "Internal server error.", err });
+  }
+};
+
+
+export const resetPassword = async(req,res)=>{
+  try{
+      const {token} = req.params;
+      const {newPassword} = req.body;
+
+      // await crypto.createHash('sha256').update(token).digest('hex');
+
+      const hashedToken =  crypto.createHash('sha256').update(token).digest('hex');
+
+      const user = await User.findOne({
+        resetPasswordToken:hashedToken,
+        resetPasswordExpiry : {$gt:Date.now()}
+      })
+
+      if(!user){
+         return res.status(401).json({ message: "User not found.!!" });
+      }
+      const hashedPassword = await bcrypt.hash(newPassword,10);
+
+      user.resetPasswordToken = null;
+      user.resetPasswordExpiry = null;
+
+      user.password = hashedPassword;
+
+      await user.save();
+
+      return res.status(201).json({ message: "Password reset successfully" });
+
+  }
+  catch(err){
+    res.status(500).json({ message: "Internal server error.", err });
+  }
+}
